@@ -1,42 +1,70 @@
-import random
 
-# Random item from a list
-def randomChoice(l):
-    return l[random.randint(0, len(l) - 1)]
-
-# Get a random category and random line from that category
-def randomTrainingPair():
-    category = randomChoice(all_categories)
-    line = randomChoice(category_lines[category])
-    return category, line
+import numpy as np
+import torch
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler
+from prepare_data import prepareData
 
 
-# One-hot vector for category
-def categoryTensor(category):
-    li = all_categories.index(category)
-    tensor = torch.zeros(1, n_categories)
-    tensor[0][li] = 1
-    return tensor
+MAX_LENGTH = 10
+SOS_token = 0
+EOS_token = 1
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# =========================
+# Prepare training data
 
-# One-hot matrix of first to last letters (not including EOS) for input
-def inputTensor(line):
-    tensor = torch.zeros(len(line), 1, n_letters)
-    for li in range(len(line)):
-        letter = line[li]
-        tensor[li][0][all_letters.find(letter)] = 1
-    return tensor
+# sentence : [id1, id2, id3, ...]
+def indexesFromSentence(lang, sentence):
+    return [lang.word2index[word] for word in sentence.split(' ')]
 
-# ``LongTensor`` of second letter to end (EOS) for target
-def targetTensor(line):
-    letter_indexes = [all_letters.find(line[li]) for li in range(1, len(line))]
-    letter_indexes.append(n_letters - 1) # EOS
-    return torch.LongTensor(letter_indexes)
+# tensors: wordtensor, row vector, size: (1, 
+# TODO : add EOS, using config files
+def tensorFromSentence(lang, sentence):
+    indexes = indexesFromSentence(lang, sentence)
+    indexes.append(EOS_token)
+    return torch.tensor(indexes, dtype=torch.long, device=device).view(1, -1)
+
+def tensorsFromPair(pair):
+    input_tensor = tensorFromSentence(input_lang, pair[0])
+    target_tensor = tensorFromSentence(output_lang, pair[1])
+    return (input_tensor, target_tensor)
+
+# batch_size here is the number of samples
+def get_dataloader(batch_size):
+    # input_lang: List[str], output_lang: List[str], pairs: List[List[str]]
+    input_lang, output_lang, pairs = prepareData('eng', 'fra', True)
+
+    # length of dataset
+    n = len(pairs)
+    # matrix, size: (n, MAX_LENGTH)
+    # row: each sentence, 
+    # col: each word in a sample sentence
+    input_ids = np.zeros((n, MAX_LENGTH), dtype=np.int32)
+    target_ids = np.zeros((n, MAX_LENGTH), dtype=np.int32)
+
+    # fill data
+    for idx, (inp, tgt) in enumerate(pairs):
+        inp_ids = indexesFromSentence(input_lang, inp)
+        tgt_ids = indexesFromSentence(output_lang, tgt)
+        inp_ids.append(EOS_token)
+        tgt_ids.append(EOS_token)
+        input_ids[idx, :len(inp_ids)] = inp_ids
+        target_ids[idx, :len(tgt_ids)] = tgt_ids
+
+    train_data = TensorDataset(torch.LongTensor(input_ids).to(device),
+                               torch.LongTensor(target_ids).to(device))
+
+    train_sampler = RandomSampler(train_data)
+    train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=batch_size)
+    return input_lang, output_lang, train_dataloader
 
 
-# Make category, input, and target tensors from a random category, line pair
-def randomTrainingExample():
-    category, line = randomTrainingPair()
-    category_tensor = categoryTensor(category)
-    input_line_tensor = inputTensor(line)
-    target_line_tensor = targetTensor(line)
-    return category_tensor, input_line_tensor, target_line_tensor
+# ===========================
+# test get_dataloader
+if __name__ == "__main__":
+    batch_size = 32
+    input_lang, output_lang, train_dataloader = get_dataloader(batch_size)
+
+    for batch_ndx, sample in enumerate(train_dataloader):
+        input_tensor, target_tensor = sample
+        print(input_tensor.shape, target_tensor.shape)
+        if (batch_ndx >= 1): break
