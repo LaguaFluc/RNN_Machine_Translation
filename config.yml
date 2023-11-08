@@ -18,5 +18,5 @@ emb_dim: 128        # 向量编码长度
 hidden_size: 256    # RNN / LSTM的隐藏层数
 seq_len: MAX_LENGTH
 
-n_epochs: 10
+n_epochs: 100
 learning_rate: 0.01

@@ -7,11 +7,26 @@ from build_network import Many2ManyRNN
 from train_prepare import get_dataloader
 from tempfile import TemporaryDirectory
 
-from torchtext.data.metrics import bleu_score
+# from torchtext.data.metrics import bleu_score
+from torchmetrics.functional.text import bleu_score
 
 import time
 import os
 import pathlib
+
+import math
+
+def asMinutes(s):
+    m = math.floor(s / 60)
+    s -= m * 60
+    return '%dm %ds' % (m, s)
+
+def timeSince(since, percent):
+    now = time.time()
+    s = now - since
+    es = s / (percent)
+    rs = es - s
+    return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 # 3. 开始训练
 def train_epoch(
@@ -90,7 +105,7 @@ def train(
         if epoch % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
-            print('(%s) (%d %d%%) %.4f' % (timeSince(start_time), epoch, epoch / n_epochs * 100, print_loss_avg))
+            print('(%s) (%d %d%%) %.4f' % (timeSince(start_time, epoch / n_epochs), epoch, epoch / n_epochs * 100, print_loss_avg))
 
         if epoch % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
@@ -139,7 +154,7 @@ def sentence2sentence(
                 output_words.append("<EOS>")
                 break
             output_words.append(output_lang.index2word[idx.item()]) 
-    return output_words
+    return " ".join(output_words)
 
 def evaluateOneSentence(
     model: nn.Module, 
@@ -157,7 +172,8 @@ def evaluateOneSentence(
 
     bleuScore = bleu_score(
         [output_words],
-        [target_sentence]
+        [target_sentence],
+        n_gram=2
     )
     return output_words, bleuScore
 
@@ -191,7 +207,7 @@ def testEvaluateOneSentence():
             model, pair[0], pair[1],
             input_lang, output_lang
             )
-        output_str = " ".join(output_words)
+        output_str = output_words
         print("output_sentence: ", output_str)
         print("bleuScore: ", bleuScore)
 
@@ -250,12 +266,14 @@ if __name__ == "__main__":
         dropout_p=0.1
     ).to(device)
 
-    model, best_val_loss = train(
-        train_dataloader,
-        model,
-        n_epochs,
-        learning_rate
-    )
+    # model, best_val_loss = train(
+    #     train_dataloader,
+    #     model,
+    #     n_epochs,
+    #     learning_rate
+    # )
+    best_model_params_path = "best_model_params.pt"
+    model.load_state_dict(torch.load(best_model_params_path))
 
     # ======================
     # 3. 评估模型（顺便测试一下）
