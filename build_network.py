@@ -1,7 +1,15 @@
 import torch
 import torch.nn as nn
 
-MAX_LENGTH = 10
+import yaml
+with open('config.yml', 'r', encoding='utf-8') as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
+    SOS_token = config['SOS_token']
+    EOS_token = config['EOS_token']
+    MAX_LENGTH = config['MAX_LENGTH']
+    batch_size = config['batch_size']
+
+
 # TODO: 这是原来的网络，我看不明白为什么要这样做
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -49,15 +57,18 @@ class Many2ManyRNN(nn.Module):
         self.linear.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, inputs):
+        # inputs.shape: [batch_size, max_length, word_embedding_dim]
         batch_size = inputs.size(0)
         embedded = self.embedding(inputs)
 
         # print("embedded.shape", embedded.shape)
+        # h0.shape: [num_layers, batch_size, hidden_size]
         h0 = self.initHidden(batch_size)
         # print("h0.shape: ", h0.shape)
         output, hidden = self.rnn(embedded, h0)
         output = self.linear(output)
-        # print("output.shape: ", output.shape)
+        # seq_length = MAX_LENGTH
+        # output.shape: [batch_size, sequence_length, vocab_size]
         return output
 
     def initHidden(self, batch_size):

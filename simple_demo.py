@@ -212,6 +212,29 @@ topi.squeeze().shape
 import torch
 from torchtext.data.metrics import bleu_score
 
-A = [" ".join(['SOS', 'SOS', 'SOS', 'SOS', 'SOS', 'SOS', 'SOS', 'SOS'])]
+A = ["he s"]
 B = ['he s looking at you']
-bleu_score(A, B)
+bleu_score(A, B, max_n=1, weights=[1])
+
+
+#%%
+from torchmetrics.text import BLEUScore
+preds = ["he s"]
+target = ['he s looking at you']
+bleu = BLEUScore(n_gram=1)
+bleu(preds, target)
+
+#%%
+import os
+import pathlib
+cwd = os.getcwd()
+path_dir = pathlib.Path(cwd)
+path_model = path_dir / 'best_model_params.pt'
+path_model
+
+#%%
+import yaml
+with open("config.yml", 'r') as stream: 
+    config = yaml.safe_load(stream) 
+    print(config)
+    print(type(config["EOS_token"]), config["EOS_token"])

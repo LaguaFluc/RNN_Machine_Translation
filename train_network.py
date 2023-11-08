@@ -5,10 +5,13 @@ import torch
 import torch.nn as nn
 from build_network import Many2ManyRNN
 from train_prepare import get_dataloader
+from tempfile import TemporaryDirectory
 
 from torchtext.data.metrics import bleu_score
 
 import time
+import os
+import pathlib
 
 # 3. 开始训练
 def train_epoch(
@@ -41,6 +44,7 @@ def train_epoch(
 
             #  TODO:
             # calculate BLEU score
+            # seq_len <= MAX_LENGTH
             # candidate: [batch_size, seq_len]
             # reference: [batch_size, seq_len]
             # bleu_score = bleu_score()
@@ -66,12 +70,22 @@ def train(
     plot_loss_total = 0
 
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-    criterion = nn.NLLLoss()
+    criterion = nn.CrossEntropyLoss()
+
+    best_val_loss = float("inf")
+
+    cwd = os.getcwd()
+    path_dir = pathlib.Path(cwd)
+    best_model_params_path = path_dir / 'best_model_params.pt'
 
     for epoch in range(1, n_epochs + 1):
         loss = train_epoch(epoch, train_dataloader, model, optimizer, criterion)
         print_loss_total += loss
         plot_loss_total += loss
+
+        if loss < best_val_loss:
+            best_val_loss = loss
+            torch.save(model.state_dict(), best_model_params_path)
 
         if epoch % print_every == 0:
             print_loss_avg = print_loss_total / print_every
@@ -82,6 +96,8 @@ def train(
             plot_loss_avg = plot_loss_total / plot_every
             plot_losses.append(plot_loss_avg)
             plot_loss_total = 0
+    model.load_state_dict(torch.load(best_model_params_path)) # load best model states
+    return model, best_val_loss
 
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
@@ -133,8 +149,10 @@ def evaluateOneSentence(
     output_lang,
     max_length: int = 10
     ):
+    model.eval()
     # 在``sentence``中随机选择一个位置，用于输入
-    
+    print("----------")
+    print("input_sentence: ", input_sentence, " target_sentence: ", target_sentence)
     output_words = sentence2sentence(model, input_sentence, input_lang, output_lang)
 
     bleuScore = bleu_score(
@@ -151,6 +169,7 @@ def evaluateNSentence(
     output_lang,
     max_length: int = 10
     ):
+    model.eval()
     output_sentences = []
     for input_sentence, target_sentence in zip(input_sentences, target_sentences):
         output_sentence, bleuScore = evaluateOneSentence(
@@ -164,6 +183,7 @@ def evaluateNSentence(
 
 def testEvaluateOneSentence():
     for i in range(5):
+        print("==============")
         pair = random.choice(pairs)
         print("input_sentence: ", pair[0])
         print("target_sentence: ", pair[1])
@@ -195,33 +215,34 @@ def testEvaluateNSentence():
 if __name__ == "__main__":
     # =======================
     # 0. 初始化数据
-    SOS_token = 0
-    EOS_token = 1
+    import yaml
+    with open('config.yml', 'r', encoding='utf-8') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+        SOS_token = config['SOS_token']
+        EOS_token = config['EOS_token']
+        MAX_LENGTH = config['MAX_LENGTH']
+        batch_size = config['batch_size']
 
-    num_layers = 1
-    MAX_LENGTH = 10
+        num_layers = config['num_layers']
 
-    log_interval = 200
-    print_every = 5
-    plot_every = 5
+        log_interval = config['log_interval']
+        print_every = config['print_every']
+        plot_every = config['plot_every']
+
+        n_epochs = config['n_epochs']
+        hidden_size = config['hidden_size']
+        learning_rate = config['learning_rate']
+        seq_len = MAX_LENGTH
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # =======================
     # 1. 获取数据
-    batch_size = 32
     input_lang, output_lang, train_dataloader = get_dataloader(batch_size)
     vocab_size = input_lang.n_words
 
     # =======================
     # 2. 初始化模型
     # 在一个epoch中训练
-    hidden_size = 128
-    batch_size = 32
-    seq_len = MAX_LENGTH
-
-    n_epochs = 1
-    learning_rate = 1e-2
-
     model = Many2ManyRNN(
         input_lang.n_words,
         hidden_size,
@@ -229,7 +250,7 @@ if __name__ == "__main__":
         dropout_p=0.1
     ).to(device)
 
-    train(
+    model, best_val_loss = train(
         train_dataloader,
         model,
         n_epochs,
@@ -238,8 +259,8 @@ if __name__ == "__main__":
 
     # ======================
     # 3. 评估模型（顺便测试一下）
-    test_evaluateOneSentence = False
-    test_evaluateNSentence = True
+    test_evaluateOneSentence = True
+    test_evaluateNSentence = False
     # 测试输出evalueOneSentence
     import random
     from prepare_data import prepareData

@@ -1,0 +1,22 @@
+# 句子中词汇最长的长度
+MAX_LENGTH: 10
+
+SOS_token: 0   # Start Of Sentence
+EOS_token: 1   # End Of Sentence
+# todo: 加上UNK_token
+
+# 训练损失，画图用的参数
+log_interval: 200
+print_every: 5
+plot_every: 5
+
+# RNN / LSTM的堆叠层数
+num_layers: 1
+
+batch_size: 32
+emb_dim: 128        # 向量编码长度
+hidden_size: 256    # RNN / LSTM的隐藏层数
+seq_len: MAX_LENGTH
+
+n_epochs: 10
+learning_rate: 0.01

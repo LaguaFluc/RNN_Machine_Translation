@@ -14,10 +14,15 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+import yaml
+with open('config.yml', 'r', encoding='utf-8') as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
+    SOS_token = config['SOS_token']
+    EOS_token = config['EOS_token']
+    MAX_LENGTH = config['MAX_LENGTH']
+
 # =========================
 # new a Data Tyle: language dataset
-SOS_token = 0
-EOS_token = 1
 
 class Lang:
     def __init__(self, name):
@@ -79,14 +84,15 @@ def readLangs(lang1, lang2, reverse=False):
         input_lang = Lang(lang1)
         output_lang = Lang(lang2)
 
+    # pairs like: [[eng1, fra1], [eng2, fra2], ...]
+    # or [[fra1, eng1], [fra2, eng2], ...]
     return input_lang, output_lang, pairs
 
 
 # =========================
 # Trim English sentence and filter too long
+# (goal: speed up training)
 # filter the sentence that starts with eng_prefixes
-MAX_LENGTH = 10
-
 eng_prefixes = (
     "i am ", "i m ",
     "he is", "he s ",
